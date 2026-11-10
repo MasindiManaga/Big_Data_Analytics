@@ -10,35 +10,37 @@
 
 ## Project overview
 
-This repository contains the implementation and documentation for Big Data Analytics Project 2. The project demonstrates the application of distributed data processing, natural language processing, web scraping, text summarisation, ETL processes and relational database analytics.
+This repository contains the implementation and documentation of four practical Big Data Analytics tasks covering distributed computing, topic modelling, web text mining, and Extract, Transform, Load (ETL) processes.
 
 ## Project components
 
 ### Question 1: Hadoop MapReduce
 
-A Java-based Hadoop MapReduce application that performs a case-insensitive search for a dynamically supplied keyword and reports its location within a corpus of news documents.
+Implements a case-insensitive keyword search using Java and Hadoop MapReduce. The program accepts a dynamically specified keyword and returns its document, row, and column positions.
 
 ### Question 2: LDA topic modelling
 
-An R-based text mining workflow that preprocesses a collection of news articles and applies Latent Dirichlet Allocation to identify and visualise the principal topics.
+Applies topic modelling to a collection of news documents using R. The workflow includes data preprocessing, document-term matrix construction, LDA modelling, topic-word distributions, and visualisations.
 
 ### Question 3: WebText analysis
 
-An R-based proof of concept that extracts textual content from a public webpage, preprocesses the content and generates summaries using two text-summarisation techniques.
+Demonstrates web content extraction, textual preprocessing, and extractive summarisation using frequency-based sentence scoring and TextRank.
 
 ### Question 4: ETL and PostgreSQL
 
-An ETL workflow that scrapes semi-structured web data, cleans and exports the dataset, loads it into PostgreSQL and performs SQL-based analytical investigations.
+Demonstrates a complete ETL workflow using R for web scraping, regular expressions, data cleaning, and CSV generation, followed by PostgreSQL for relational storage and analytical SQL queries.
 
 ## Technologies
 
-- Java
-- Apache Hadoop
-- R
-- RStudio
+- Java and Apache Hadoop
+
+- R and RStudio
+
 - PostgreSQL
-- pgAdmin
+
 - Git and GitHub
+
+- R Markdown or Quarto for reproducible analytical reports
 
 ## Repository structure
 
