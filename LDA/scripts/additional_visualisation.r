@@ -1,6 +1,7 @@
-
+# load libraries
 library(ggplot2)
 library(tidytext)
+library(dplyr)
 
 top_words %>%
   mutate(
