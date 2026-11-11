@@ -1,4 +1,3 @@
-
 package org.itbda.mapreduce;
 
 import org.apache.hadoop.conf.Configuration;
