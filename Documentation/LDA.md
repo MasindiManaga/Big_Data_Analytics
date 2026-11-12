@@ -93,7 +93,21 @@ The horizontal axis represents topic-word probability (beta), while the vertical
 
 The chart illustrates differences in vocabulary across the four topics. For example, `south` has the highest probability within Topic 1, while `eskom` has the highest probability within Topic 3.
 
-### 6.2 Document-Topic Distribution Heatmap
+### 6.2 Keyword Probability Heatmap
+
+![Top Keyword Probabilities Across LDA Topics](../LDA/figures/keyword_heatmap.png)
+
+The keyword probability heatmap provides a second visualisation of the highest-probability terms identified by the LDA model.
+
+The horizontal axis represents the four topics, while the vertical axis displays the extracted keywords. Colour intensity represents the topic-word probability (beta), with darker cells indicating higher probabilities.
+
+This visualisation complements the horizontal bar chart by presenting keyword probabilities in a matrix format, making it easier to examine which keywords are prominent within each topic.
+
+For example, `south`, `service`, and `invoices` are prominent in Topic 1, while `government` and `coalition` are prominent in Topic 2.
+
+The heatmap displays the top ten extracted words per topic rather than the complete model vocabulary. Blank cells therefore indicate combinations not included in the exported top-word selection, rather than necessarily indicating zero probability.
+
+### 6.3 Document-Topic Distribution Heatmap
 
 ![LDA Topic Distribution Across News Documents](../LDA/figures/heatmap.png)
 
@@ -135,6 +149,7 @@ Overall, the analysis demonstrates how LDA can support the identification and vi
 **Visualisation outputs:** `LDA/figures/`
 
 - `topic_keywords.png`
+- `keyword_heatmap.png`
 - `heatmap.png`
 
 ## 9. R Implementation

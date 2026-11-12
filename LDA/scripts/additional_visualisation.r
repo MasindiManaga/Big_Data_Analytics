@@ -58,3 +58,32 @@ ggsave(
   width = 10,
   height = 7
 )
+
+# keyword probability heatmap
+keyword_heatmap <- top_words %>%
+  ggplot(
+    aes(
+      x = factor(topic),
+      y = term,
+      fill = beta
+    )
+  ) +
+  geom_tile(color = "white") +
+  scale_fill_gradient(
+    low = "#f1f5f9",
+    high = "#2563eb"
+  ) +
+  labs(
+    title = "Top Keyword Probabilities Across LDA Topics",
+    x = "LDA Topic",
+    y = "Keyword",
+    fill = "Beta"
+  ) +
+  theme_minimal()
+
+ggsave(
+  "LDA/figures/keyword_heatmap.png",
+  plot = keyword_heatmap,
+  width = 10,
+  height = 9
+)
