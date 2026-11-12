@@ -1,21 +1,23 @@
+
 # load libraries
 library(dplyr)
 library(tidytext)
 library(stringr)
+library(tidyr)
 library(igraph)
-library(dplyr)
-library(tidytext)
 library(Matrix)
+library(ggplot2)
 
+# load processed data
+web_df <- read.csv(
+  "D:/BigDataAnalytics/WebText_API/data/processed/web_content_clean.csv",
+  stringsAsFactors = FALSE
+)
 
 # prepare sentences
 sentences <- web_df %>%
-  select(paragraph_id, clean_content) %>%
-  unnest_tokens(
-    sentence,
-    clean_content,
-    token = "sentences"
-  ) %>%
+  select(paragraph_id, content) %>%
+  unnest_tokens(sentence, content, token = "sentences") %>%
   mutate(sentence_id = row_number()) %>%
   filter(nchar(sentence) > 30)
 
@@ -26,147 +28,100 @@ word_scores <- sentences %>%
   filter(str_detect(word, "^[a-z]+$")) %>%
   count(word, name = "frequency")
 
-# calculate sentence scores
+# calculate frequency-based sentence scores
 sentence_scores <- sentences %>%
   unnest_tokens(word, sentence) %>%
   inner_join(word_scores, by = "word") %>%
   group_by(sentence_id) %>%
   summarise(
-    score = sum(frequency) / n(),
+    score = sum(frequency) / sqrt(n()),
+    word_count = n(),
     .groups = "drop"
   )
 
-# select top five sentences
+# generate frequency-based summary
 frequency_summary <- sentences %>%
-  inner_join(
-    sentence_scores,
-    by = "sentence_id"
-  ) %>%
-  slice_max(
-    score,
-    n = 5,
-    with_ties = FALSE
-  ) %>%
+  inner_join(sentence_scores, by = "sentence_id") %>%
+  filter(word_count >= 8, word_count <= 60) %>%
+  slice_max(score, n = 5, with_ties = FALSE) %>%
   arrange(sentence_id)
 
-cat(
-  paste(frequency_summary$sentence, collapse = " ")
-)
+cat("\nFREQUENCY-BASED SUMMARY\n")
+cat(paste(frequency_summary$sentence, collapse = "\n\n"))
 
-
-library(ggplot2)
-
-word_frequency %>%
-  slice_max(
-    n,
-    n = 15,
-    with_ties = FALSE
-  ) %>%
-  ggplot(
-    aes(x = reorder(word, n), y = n)
-  ) +
-  geom_col(fill = "steelblue") +
-  coord_flip() +
-  labs(
-    title = "Most Frequent Keywords in Web Content",
-    x = "Keyword",
-    y = "Frequency"
-  ) +
-  theme_minimal()
-
-ggsave(
-  "WebText_API/figures/word_frequency.png",
-  width = 10,
-  height = 7
-)
-
-
-# create sentence-term matrix
+# prepare sentence tokens
 sentence_tokens <- sentences %>%
   unnest_tokens(word, sentence) %>%
   anti_join(stop_words, by = "word") %>%
   filter(str_detect(word, "^[a-z]+$"))
 
+# create sentence-term matrix
 sentence_dtm <- sentence_tokens %>%
   count(sentence_id, word) %>%
   cast_dtm(sentence_id, word, n)
 
+# convert to sparse matrix
+term_counts <- as(sentence_dtm, "sparseMatrix")
+
 # calculate TF-IDF
-term_counts <- as.matrix(sentence_dtm)
-
 term_frequency <- term_counts /
-  pmax(rowSums(term_counts), 1)
+  pmax(Matrix::rowSums(term_counts), 1)
 
-document_frequency <- colSums(term_counts > 0)
+document_frequency <- Matrix::colSums(term_counts > 0)
 
 idf <- log(
   (nrow(term_counts) + 1) /
   (document_frequency + 1)
 ) + 1
 
-tfidf <- sweep(
-  term_frequency,
-  2,
-  idf,
-  "*"
-)
+tfidf <- term_frequency %*%
+  Matrix::Diagonal(x = as.numeric(idf))
 
-# cosine similarity
-norms <- sqrt(rowSums(tfidf^2))
+# calculate cosine similarity
+norms <- sqrt(Matrix::rowSums(tfidf^2))
 
-normalised <- tfidf /
-  pmax(norms, 1e-10)
+normalised <- Matrix::Diagonal(
+  x = 1 / pmax(norms, 1e-10)
+) %*% tfidf
 
-similarity <- normalised %*% t(normalised)
-
+similarity <- Matrix::tcrossprod(normalised)
 diag(similarity) <- 0
 
-# construct weighted graph
-graph <- graph_from_adjacency_matrix(
+# create sentence similarity graph
+graph <- igraph::graph_from_adjacency_matrix(
   similarity,
   mode = "undirected",
   weighted = TRUE,
   diag = FALSE
 )
 
-# rank sentences
-rank_values <- page_rank(
+# calculate TextRank scores
+rank_values <- igraph::page_rank(
   graph,
   directed = FALSE,
-  weights = E(graph)$weight
+  weights = igraph::E(graph)$weight
 )$vector
 
 textrank_scores <- data.frame(
-  sentence_id = as.integer(
-    rownames(term_counts)
-  ),
+  sentence_id = as.integer(rownames(term_counts)),
   score = as.numeric(rank_values)
 )
 
-# select top five sentences
+# generate TextRank summary
 textrank_summary <- sentences %>%
-  inner_join(
-    textrank_scores,
-    by = "sentence_id"
-  ) %>%
-  slice_max(
-    score,
-    n = 5,
-    with_ties = FALSE
-  ) %>%
+  inner_join(textrank_scores, by = "sentence_id") %>%
+  slice_max(score, n = 5, with_ties = FALSE) %>%
   arrange(sentence_id)
 
-cat(
-  paste(textrank_summary$sentence, collapse = " ")
-)
+cat("\n\nTEXTRANK SUMMARY\n")
+cat(paste(textrank_summary$sentence, collapse = "\n\n"))
 
+# compare summarisation scores
 comparison <- sentence_scores %>%
-  rename(
-    Frequency = score
-  ) %>%
+  select(sentence_id, Frequency = score) %>%
   full_join(
     textrank_scores %>%
-      rename(TextRank = score),
+      select(sentence_id, TextRank = score),
     by = "sentence_id"
   ) %>%
   mutate(
@@ -179,13 +134,10 @@ comparison <- sentence_scores %>%
     values_to = "score"
   )
 
-ggplot(
+# create comparison chart
+comparison_plot <- ggplot(
   comparison,
-  aes(
-    x = sentence_id,
-    y = score,
-    colour = method
-  )
+  aes(x = sentence_id, y = score, colour = method)
 ) +
   geom_line() +
   labs(
@@ -196,8 +148,16 @@ ggplot(
   ) +
   theme_minimal()
 
+# save comparison chart
 ggsave(
-  "WebText_API/figures/summary_comparison.png",
+  "D:/BigDataAnalytics/WebText_API/figures/summary_comparison.png",
+  plot = comparison_plot,
   width = 11,
-  height = 6
+  height = 6,
+  dpi = 300
 )
+
+# verify output
+print(file.exists(
+  "D:/BigDataAnalytics/WebText_API/figures/summary_comparison.png"
+))
