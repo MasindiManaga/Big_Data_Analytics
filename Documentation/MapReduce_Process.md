@@ -31,59 +31,64 @@ The exact definition of a column position must be consistent throughout the impl
 ### 3.1 Logical Layout Diagram
 
 ```text
-              INPUT NEWS DOCUMENTS
-             map_reduce_test_docs.zip
-                       |
-                       v
-              Extract text documents
-                       |
-                       v
-                HADOOP INPUT
-                       |
-                       v
-                 INPUT SPLITS
-                       |
-              +--------+--------+
-              |                 |
-              v                 v
-           MAPPER 1          MAPPER 2
-              |                 |
-       Read input lines   Read input lines
-       Search keyword     Search keyword
-       Ignore case        Ignore case
-              |                 |
-              v                 v
-         Emit matches       Emit matches
-         with locations     with locations
-              |                 |
-              +--------+--------+
-                       |
-                       v
-                SHUFFLE & SORT
-             Group emitted records
-                       |
-                       v
-                    REDUCER
-             Collect matching locations
-                       |
-                       v
-                 HADOOP OUTPUT
-             Document, row, column
+                            INPUT DATASET
+        map_reduce_test_docs.zip
+                    |
+                    v
+          EXTRACTED DOCUMENTS
+          doc1.txt ... doc7.txt
+                    |
+                    v
+          WholeFileInputFormat
+          (one split per file)
+                    |
+                    v
+          WholeFileRecordReader
+        (filename, full content)
+                    |
+                    v
+              MAPPER TASKS
+          KeywordMapper.java
+        - Read search.keyword
+        - Convert text to lowercase
+        - Search each document line
+        - Calculate row and column
+                    |
+                    v
+          INTERMEDIATE OUTPUT
+       Key: document name + row
+       Value: column position
+                    |
+                    v
+             SHUFFLE & SORT
+        Group by document and row
+                    |
+                    v
+                REDUCER
+          KeywordReducer.java
+        - Collect column positions
+        - Sort columns numerically
+        - Write each occurrence
+                    |
+                    v
+              FINAL OUTPUT
+               part-r-00000
+          Document | Row | Column
 ```
 
 ### 3.2 MapReduce Processing Stages
 
 **Input stage**
 
-The news articles are supplied as text files to the Hadoop application. Hadoop's input-processing mechanism makes the text available to the Mapper.
+The seven extracted text documents are supplied to Hadoop. `WholeFileInputFormat` prevents each file from being split into smaller input records.
+
+**Record reading**
+
+`WholeFileRecordReader` reads the file as UTF-8 text and produces a key-value pair containing the filename and complete document contents.
 
 **Mapping stage**
 
-The Mapper examines the input text and searches for the keyword supplied by the user.
-
-The comparison is case-insensitive so that occurrences such as `Africa`, `AFRICA` and `africa` can be recognised as matches.
-
-For each occurrence, the Mapper must identify the document, row and column position and emit a corresponding intermediate record.
+`KeywordMapper` retrieves the search keyword from the job configuration, performs case-insensitive substring matching, and emits the document name, one-based row and one-based column for each match.
 
 **Shuffle and Sort stage**
 
@@ -91,33 +96,21 @@ Hadoop organises intermediate records according to their emitted keys and transf
 
 **Reducing stage**
 
-The Reducer receives grouped records from the Mapper and produces the final keyword-location results.
+`KeywordReducer` collects and sorts the column positions for each key and writes one record per occurrence.
 
 **Output stage**
 
-The final results are written to the Hadoop output directory for examination.
+Hadoop writes the results to part-r-00000. The verified africa execution produced 22 output records from seven input documents.
 
 ## 4. Mapper Implementation (Question 1.2)
 
 ### 4.1 Objective
 
-The Mapper is responsible for identifying occurrences of the dynamically supplied keyword within the input documents.
+The Mapper identifies occurrences of a user-specified keyword within the input documents.
 
-It must:
+The implementation is contained in KeywordMapper.java, which extends Hadoop's Mapper<Text, Text, Text, LongWritable> class.
 
-1. Read the input text.
-2. Retrieve the search keyword from the Hadoop job configuration.
-3. Perform case-insensitive matching.
-4. Identify the row and column location of each occurrence.
-5. Emit intermediate records containing the matching locations.
-
-### 4.2 Mapper Interpretation
-
-The Mapper distributes the search operation across the input data and identifies individual keyword occurrences.
-
-Case-insensitive matching ensures that differences in capitalisation do not prevent the identification of matching words.
-
-The effectiveness of the location reporting depends on how the implementation tracks line numbers and character offsets, particularly when Hadoop divides input files into multiple splits.
+The input consists of a filename and the complete document text. The output consists of a document-and-row key and a column-position value.
 
 ## 5. Reducer Implementation (Question 1.3)
 
@@ -127,20 +120,70 @@ The Reducer processes the intermediate records generated by the Mapper and produ
 
 Its behaviour depends on the key-value structure used by the Mapper.
 
-### 5.2 Reducer Interpretation
+## 6. Hadoop MapReduce Configuration (Question 1.4)
 
-The Reducer provides the final processing stage of the MapReduce workflow.
+## 6.1 Job Configuration
 
-Its output should preserve sufficient information to identify the document and row-column position of every reported match.
+The Hadoop job is configured in KeywordSearchDriver.java.
 
-## 6. Conclusion
+The Driver requires three command-line arguments:
+
+- Input directory.
+
+- Output directory.
+
+- Search keyword.
+
+The keyword is stored in the Hadoop configuration using:
+
+```cmd
+conf.set("search.keyword", args[2]);
+```
+
+The Driver creates a job named Case-insensitive keyword search and associates it with the application JAR.
+
+The Hadoop job is configured in KeywordSearchDriver.java.
+
+## 6.2 Hadoop Execution
+
+The application was executed from the project root directory using the following command:
+
+```cmd
+hadoop jar MapReduce\target\keyword-search.jar org.itbda.mapreduce.KeywordSearchDriver MapReduce\data\raw\map_reduce_test_docs\map_reduce_test_docs MapReduce\output\africa_test africa
+```
+
+The command specifies the compiled JAR, Driver class, input directory, output directory and search keyword.
+
+Hadoop was run in local execution mode on Windows. The testing therefore demonstrates local MapReduce execution.
+
+## 7. Conclusion
 
 The project is intended to demonstrate the use of Hadoop MapReduce for distributed keyword searching across a collection of news articles.
 
 The Mapper identifies keyword occurrences, the Shuffle and Sort stage groups intermediate records, and the Reducer produces the final results.
 
-## 7. Source Code and Supporting Files
+## 8. Source Code and Supporting Files
 
-**Assessment dataset:** `map_reduce_test_docs.zip`
+Assessment dataset: map_reduce_test_docs.zip
 
-**Assessment source:** Matanga, N. Y. (2026). *MapReduce Process*. Assessment brief.
+Java implementation:
+
+MapReduce/src/main/java/org/itbda/mapreduce/KeywordSearchDriver.java
+
+MapReduce/src/main/java/org/itbda/mapreduce/KeywordMapper.java
+
+MapReduce/src/main/java/org/itbda/mapreduce/KeywordReducer.java
+
+MapReduce/src/main/java/org/itbda/mapreduce/WholeFileInputFormat.java
+
+MapReduce/src/main/java/org/itbda/mapreduce/WholeFileRecordReader.java
+
+Execution evidence:
+
+MapReduce/evidence/keyword_search_results.txt
+
+MapReduce/evidence/africa_search_results.txt
+
+Assessment source:
+
+Matanga, N. Y. (2026). MapReduce Process. Assessment brief.
