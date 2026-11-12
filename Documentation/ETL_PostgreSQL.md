@@ -50,24 +50,26 @@ The cleaned dataset was saved as `ETL_PostgreSQL/data/clean_quotes.csv`, and the
 
 ## 4. PostgreSQL Database Integration (Question 4.3)
 
-A PostgreSQL table named `quotes` was created to store the cleaned quotation records.
+A dedicated PostgreSQL database named `quotes_etl_db` was created to store the cleaned quotation records.
 
-The table contains six columns:
+A relational table named `quotes` was created using the SQL `CREATE TABLE IF NOT EXISTS` statement. The table contains six columns, including an automatically generated primary key.
 
 | Column | Data type | Purpose |
 |---|---|---|
-| `quote_id` | INTEGER | Automatically generated primary key |
+| `quote_id` | SERIAL PRIMARY KEY | Automatically generated unique identifier |
 | `quote` | TEXT | Quotation content |
 | `author` | VARCHAR(255) | Author name |
 | `tags` | TEXT | Comma-separated categories |
-| `source_page` | INTEGER | Original page number |
+| `source_page` | INTEGER | Original webpage number |
 | `quote_length` | INTEGER | Quotation word count |
 
-The table was created using `CREATE TABLE IF NOT EXISTS`, with a primary key and constraints to maintain data integrity.
+The cleaned dataset, `clean_quotes.csv`, was imported into PostgreSQL using the `\copy` command. The import successfully transferred all 30 records into the `quotes` table.
 
-The cleaned data was imported from R using the `DBI` and `RPostgres` packages. The import was executed within a database transaction.
+R database connectivity was subsequently implemented using the `DBI` and `RPostgres` packages. The R script established a connection to PostgreSQL, retrieved the imported record count, executed the two analytical SQL queries and exported their results to CSV files.
 
-A SQL record-count query confirmed that **30 records were successfully stored in PostgreSQL**.
+A verification query confirmed that all 30 quotation records were successfully stored in the database.
+
+The database connection and analytical operations were successfully executed through the R script `ETL_PostgreSQL/scripts/PostgreSQL.r`.
 
 ## 5. SQL Investigation 1: Author Analysis
 

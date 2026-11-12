@@ -3,6 +3,13 @@ library(dplyr)
 library(stringr)
 library(tidyr)
 
+# load raw dataset
+raw_quotes <- read.csv(
+  "ETL_PostgreSQL/data/raw_quotes.csv",
+  stringsAsFactors = FALSE,
+  fileEncoding = "UTF-8"
+)
+
 # standardise text
 standardised_quotes <- raw_quotes %>%
   mutate(

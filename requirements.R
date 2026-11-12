@@ -15,7 +15,9 @@ required_packages <- c(
   "topicmodels",
   "slam",
   "reshape2",
-  "plyr"
+  "plyr",
+  "DBI",
+"RPostgres"
 )
 
 # identify missing packages
