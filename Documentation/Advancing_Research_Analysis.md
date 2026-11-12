@@ -363,3 +363,436 @@ R Core Team. *An Introduction to R*. Comprehensive R Archive Network (CRAN).
 https://cran.r-project.org/doc/manuals/r-release/R-intro.html
 
 The original source is acknowledged for its educational and technical content.
+
+
+## Appendix A: R Scripts
+
+### scrapping.r
+
+```r
+# load libraries
+library(rvest)
+library(dplyr)
+library(stringr)
+library(tibble)
+library(ggplot2)
+
+# define web text extraction
+extract_web_text <- function(url) {
+
+  page <- read_html(url)
+
+  title <- page |>
+    html_element("title") |>
+    html_text2() |>
+    str_squish()
+
+  paragraphs <- page |>
+    html_elements("p") |>
+    html_text2()
+
+  # remove empty and short paragraphs
+  paragraphs <- str_squish(paragraphs)
+
+  paragraphs <- paragraphs[
+    !is.na(paragraphs) &
+      str_length(paragraphs) >= 80
+  ]
+
+  tibble(
+    url = url,
+    title = title,
+    paragraph_id = seq_along(paragraphs),
+    content = paragraphs
+  )
+}
+
+# specify source
+website_url <- "https://cran.r-project.org/doc/manuals/r-release/R-intro.html"
+
+# extract content
+web_df <- extract_web_text(website_url)
+
+# inspect extracted data
+print(dim(web_df))
+print(head(web_df, 10))
+
+# define output folders
+raw_dir <- "D:/BigDataAnalytics/WebText_API/data/raw"
+processed_dir <- "D:/BigDataAnalytics/WebText_API/data/processed"
+
+dir.create(raw_dir, recursive = TRUE, showWarnings = FALSE)
+dir.create(processed_dir, recursive = TRUE, showWarnings = FALSE)
+
+# save raw dataset
+write.csv(
+  web_df,
+  file.path(raw_dir, "web_content.csv"),
+  row.names = FALSE
+)
+
+# clean extracted content
+clean_web_df <- web_df |>
+  mutate(content = str_squish(content)) |>
+  filter(
+    !grepl("^Next:|^Previous:|^Up:", content),
+    !grepl("^Copyright|^Permission is granted", content),
+    !grepl("^Comments and corrections", content)
+  ) |>
+  distinct(content, .keep_all = TRUE)
+
+# save processed dataset
+write.csv(
+  clean_web_df,
+  file.path(processed_dir, "web_content_clean.csv"),
+  row.names = FALSE
+)
+
+# verify saved datasets
+print(file.exists(
+  file.path(raw_dir, "web_content.csv")
+))
+
+print(file.exists(
+  file.path(processed_dir, "web_content_clean.csv")
+))
+```
+
+### textual_processing.r
+
+```r
+# load libraries
+library(dplyr)
+library(stringr)
+library(tidytext)
+
+# load processed dataset
+web_data <- read.csv(
+  "D:/BigDataAnalytics/WebText_API/data/processed/web_content_clean.csv",
+  stringsAsFactors = FALSE
+)
+
+# inspect dataset
+print(dim(web_data))
+print(names(web_data))
+print(head(web_data$content, 3))
+
+# convert text to lowercase
+web_data <- web_data |>
+  mutate(clean_text = str_to_lower(content))
+
+# tokenize text into words
+tokens <- web_data |>
+  select(paragraph_id, clean_text) |>
+  unnest_tokens(word, clean_text)
+
+# remove stop words and numeric tokens
+filtered_tokens <- tokens |>
+  anti_join(stop_words, by = "word") |>
+  filter(!str_detect(word, "^[0-9]+$"))
+
+# calculate word frequencies
+word_freq <- filtered_tokens |>
+  count(word, sort = TRUE)
+
+# inspect top words
+print(head(word_freq, 15))
+
+# inspect results
+print(dim(tokens))
+print(dim(filtered_tokens))
+print(head(word_freq, 15))
+
+# load visualisation library
+library(ggplot2)
+
+# select top 15 words
+top_words <- word_freq |>
+  slice_head(n = 15)
+
+# create word frequency chart
+word_plot <- ggplot(
+  top_words,
+  aes(x = reorder(word, n), y = n)
+) +
+  geom_col(fill = "steelblue") +
+  coord_flip() +
+  labs(
+    title = "Most Frequent Words in R Documentation",
+    x = "Words",
+    y = "Frequency"
+  ) +
+  theme_minimal()
+
+# display chart
+print(word_plot)
+
+# create figures folder
+figures_dir <- "D:/BigDataAnalytics/WebText_API/figures"
+
+dir.create(
+  figures_dir,
+  recursive = TRUE,
+  showWarnings = FALSE
+)
+
+# save chart
+ggsave(
+  filename = file.path(figures_dir, "word_frequency.png"),
+  plot = word_plot,
+  width = 10,
+  height = 6,
+  dpi = 300
+)
+
+# verify saved chart
+file.exists(file.path(figures_dir, "word_frequency.png"))
+
+# load library
+library(wordcloud)
+
+# save word cloud
+png(
+  "D:/BigDataAnalytics/WebText_API/figures/word_cloud.png",
+  width = 1200,
+  height = 800,
+  res = 150
+)
+
+# generate word cloud
+wordcloud(
+  words = word_freq$word,
+  freq = word_freq$n,
+  min.freq = 2,
+  max.words = 100,
+  random.order = FALSE,
+  colors = c("steelblue", "darkblue", "grey40")
+)
+
+# close graphics device
+dev.off()
+
+# verify saved file
+file.exists(
+  "D:/BigDataAnalytics/WebText_API/figures/word_cloud.png"
+)
+```
+
+### text_summarisation.r
+
+```r
+
+# load libraries
+library(dplyr)
+library(tidytext)
+library(stringr)
+library(tidyr)
+library(igraph)
+library(Matrix)
+library(ggplot2)
+
+# load processed data
+web_df <- read.csv(
+  "D:/BigDataAnalytics/WebText_API/data/processed/web_content_clean.csv",
+  stringsAsFactors = FALSE
+)
+
+# prepare sentences
+sentences <- web_df %>%
+  select(paragraph_id, content) %>%
+  unnest_tokens(sentence, content, token = "sentences") %>%
+  mutate(sentence_id = row_number()) %>%
+  filter(nchar(sentence) > 30)
+
+# calculate word frequencies
+word_scores <- sentences %>%
+  unnest_tokens(word, sentence) %>%
+  anti_join(stop_words, by = "word") %>%
+  filter(str_detect(word, "^[a-z]+$")) %>%
+  count(word, name = "frequency")
+
+# calculate frequency-based sentence scores
+sentence_scores <- sentences %>%
+  unnest_tokens(word, sentence) %>%
+  inner_join(word_scores, by = "word") %>%
+  group_by(sentence_id) %>%
+  summarise(
+    score = sum(frequency) / sqrt(n()),
+    word_count = n(),
+    .groups = "drop"
+  )
+
+# generate frequency-based summary
+frequency_summary <- sentences %>%
+  inner_join(sentence_scores, by = "sentence_id") %>%
+  filter(word_count >= 8, word_count <= 60) %>%
+  slice_max(score, n = 5, with_ties = FALSE) %>%
+  arrange(sentence_id)
+
+cat("\nFREQUENCY-BASED SUMMARY\n")
+cat(paste(frequency_summary$sentence, collapse = "\n\n"))
+
+# prepare sentence tokens
+sentence_tokens <- sentences %>%
+  unnest_tokens(word, sentence) %>%
+  anti_join(stop_words, by = "word") %>%
+  filter(str_detect(word, "^[a-z]+$"))
+
+# create sentence-term matrix
+sentence_dtm <- sentence_tokens %>%
+  count(sentence_id, word) %>%
+  cast_dtm(sentence_id, word, n)
+
+# convert to sparse matrix
+term_counts <- as(sentence_dtm, "sparseMatrix")
+
+# calculate TF-IDF
+term_frequency <- term_counts /
+  pmax(Matrix::rowSums(term_counts), 1)
+
+document_frequency <- Matrix::colSums(term_counts > 0)
+
+idf <- log(
+  (nrow(term_counts) + 1) /
+  (document_frequency + 1)
+) + 1
+
+tfidf <- term_frequency %*%
+  Matrix::Diagonal(x = as.numeric(idf))
+
+# calculate cosine similarity
+norms <- sqrt(Matrix::rowSums(tfidf^2))
+
+normalised <- Matrix::Diagonal(
+  x = 1 / pmax(norms, 1e-10)
+) %*% tfidf
+
+similarity <- Matrix::tcrossprod(normalised)
+diag(similarity) <- 0
+
+# create sentence similarity graph
+graph <- igraph::graph_from_adjacency_matrix(
+  similarity,
+  mode = "undirected",
+  weighted = TRUE,
+  diag = FALSE
+)
+
+# calculate TextRank scores
+rank_values <- igraph::page_rank(
+  graph,
+  directed = FALSE,
+  weights = igraph::E(graph)$weight
+)$vector
+
+textrank_scores <- data.frame(
+  sentence_id = as.integer(rownames(term_counts)),
+  score = as.numeric(rank_values)
+)
+
+# generate TextRank summary
+textrank_summary <- sentences %>%
+  inner_join(textrank_scores, by = "sentence_id") %>%
+  slice_max(score, n = 5, with_ties = FALSE) %>%
+  arrange(sentence_id)
+
+cat("\n\nTEXTRANK SUMMARY\n")
+cat(paste(textrank_summary$sentence, collapse = "\n\n"))
+
+# compare summarisation scores
+comparison <- sentence_scores %>%
+  select(sentence_id, Frequency = score) %>%
+  full_join(
+    textrank_scores %>%
+      select(sentence_id, TextRank = score),
+    by = "sentence_id"
+  ) %>%
+  mutate(
+    Frequency = Frequency / max(Frequency, na.rm = TRUE),
+    TextRank = TextRank / max(TextRank, na.rm = TRUE)
+  ) %>%
+  pivot_longer(
+    cols = c(Frequency, TextRank),
+    names_to = "method",
+    values_to = "score"
+  )
+
+# create comparison chart
+comparison_plot <- ggplot(
+  comparison,
+  aes(x = sentence_id, y = score, colour = method)
+) +
+  geom_line() +
+  labs(
+    title = "Comparison of Sentence Importance Scores",
+    x = "Sentence Number",
+    y = "Normalised Importance Score",
+    colour = "Method"
+  ) +
+  theme_minimal()
+
+# save comparison chart
+ggsave(
+  "D:/BigDataAnalytics/WebText_API/figures/summary_comparison.png",
+  plot = comparison_plot,
+  width = 11,
+  height = 6,
+  dpi = 300
+)
+
+# verify output
+print(file.exists(
+  "D:/BigDataAnalytics/WebText_API/figures/summary_comparison.png"
+))
+
+# prepare top sentence scores
+top_scores <- bind_rows(
+  frequency_summary %>%
+    transmute(
+      sentence_id,
+      method = "Frequency-based",
+      score = score / max(sentence_scores$score)
+    ),
+  textrank_summary %>%
+    transmute(
+      sentence_id,
+      method = "TextRank",
+      score = score / max(textrank_scores$score)
+    )
+)
+
+# visualise top-ranked sentences
+top_sentences_plot <- ggplot(
+  top_scores,
+  aes(
+    x = reorder(as.factor(sentence_id), score),
+    y = score,
+    fill = method
+  )
+) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  facet_wrap(~ method, scales = "free_y") +
+  labs(
+    title = "Top Five Sentences by Summarisation Method",
+    subtitle = "Sentence scores normalised within each method",
+    x = "Sentence ID",
+    y = "Normalised Importance Score"
+  ) +
+  theme_minimal()
+
+# save visualisation
+ggsave(
+  "D:/BigDataAnalytics/WebText_API/figures/top_summary_sentences.png",
+  plot = top_sentences_plot,
+  width = 11,
+  height = 6,
+  dpi = 300
+)
+
+# verify output
+file.exists(
+  "D:/BigDataAnalytics/WebText_API/figures/top_summary_sentences.png"
+)
+```
+
