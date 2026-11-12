@@ -161,3 +161,53 @@ ggsave(
 print(file.exists(
   "D:/BigDataAnalytics/WebText_API/figures/summary_comparison.png"
 ))
+
+# prepare top sentence scores
+top_scores <- bind_rows(
+  frequency_summary %>%
+    transmute(
+      sentence_id,
+      method = "Frequency-based",
+      score = score / max(sentence_scores$score)
+    ),
+  textrank_summary %>%
+    transmute(
+      sentence_id,
+      method = "TextRank",
+      score = score / max(textrank_scores$score)
+    )
+)
+
+# visualise top-ranked sentences
+top_sentences_plot <- ggplot(
+  top_scores,
+  aes(
+    x = reorder(as.factor(sentence_id), score),
+    y = score,
+    fill = method
+  )
+) +
+  geom_col(show.legend = FALSE) +
+  coord_flip() +
+  facet_wrap(~ method, scales = "free_y") +
+  labs(
+    title = "Top Five Sentences by Summarisation Method",
+    subtitle = "Sentence scores normalised within each method",
+    x = "Sentence ID",
+    y = "Normalised Importance Score"
+  ) +
+  theme_minimal()
+
+# save visualisation
+ggsave(
+  "D:/BigDataAnalytics/WebText_API/figures/top_summary_sentences.png",
+  plot = top_sentences_plot,
+  width = 11,
+  height = 6,
+  dpi = 300
+)
+
+# verify output
+file.exists(
+  "D:/BigDataAnalytics/WebText_API/figures/top_summary_sentences.png"
+)

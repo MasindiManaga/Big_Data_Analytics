@@ -114,11 +114,13 @@ The heatmap demonstrates that documents differ in their topic distributions, wit
 
 ## 7. Conclusion
 
-The LDA analysis successfully identified four statistical topics from ten South African news articles.
+Latent Dirichlet Allocation was applied to ten South African news articles to identify four underlying statistical topics. Text preprocessing, tokenisation, stopword removal and Document-Term Matrix construction prepared the unstructured text for topic modelling.
 
-Text preprocessing and Document-Term Matrix construction enabled the application of Gibbs-sampling-based LDA. The resulting topic-word and document-topic distributions were examined using a keyword probability chart and a document-topic heatmap.
+The topic-word probability distributions identified themes relating to public service administration, government coalitions, electricity and public safety, and socioeconomic development. The document-topic heatmap further demonstrated differences in topic representation across individual news articles.
 
-The findings demonstrate how topic modelling can assist in exploring themes within unstructured textual data. However, the small corpus and overlapping vocabulary mean that the identified topics should be interpreted cautiously.
+Although the model identified distinguishable patterns, some topics contained overlapping or unrelated terminology. This may reflect the limited size and thematic diversity of the ten-document corpus. Consequently, the topics should be regarded as exploratory findings rather than definitive classifications.
+
+Overall, the analysis demonstrates how LDA can support the identification and visualisation of recurring themes in unstructured news content.
 
 ## 8. Output Files
 
@@ -133,4 +135,12 @@ The findings demonstrate how topic modelling can assist in exploring themes with
 **Visualisation outputs:** `LDA/figures/`
 
 - `topic_keywords.png`
-- `document_topic_heatmap.png`
+- `heatmap.png`
+
+## 9. R Implementation
+
+The analysis was implemented in R, covering data import, text preprocessing, Document-Term Matrix construction, LDA model development, topic extraction and visualisation.
+
+The R scripts used for the analysis are maintained in the `LDA/scripts/` directory.
+
+The generated datasets and model outputs are available in `LDA/results/`, while the corresponding visualisations are stored in `LDA/figures/`.

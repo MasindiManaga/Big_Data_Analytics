@@ -3,19 +3,30 @@ library(dplyr)
 library(stringr)
 library(tidyr)
 
-# clean and transform data
-clean_quotes <- raw_quotes %>%
+# standardise text
+standardised_quotes <- raw_quotes %>%
   mutate(
     quote = str_squish(quote),
-    quote = str_remove_all(
-      quote,
-      "^[“”\"']+|[“”\"']+$"
-    ),
+    quote = str_remove_all(quote, "^[“”\"']+|[“”\"']+$"),
+    quote = str_squish(quote),
     author = str_squish(author),
     tags = str_squish(tags),
     author = na_if(author, ""),
-    tags = na_if(tags, "")
-  ) %>%
+    tags = na_if(tags, ""),
+    author = if_else(
+      str_to_lower(author) %in% c("na", "n/a", "null"),
+      NA_character_,
+      author
+    ),
+    tags = if_else(
+      str_to_lower(tags) %in% c("na", "n/a", "null"),
+      NA_character_,
+      tags
+    )
+  )
+
+# clean and transform data
+clean_quotes <- standardised_quotes %>%
   filter(
     !is.na(quote),
     quote != ""
@@ -26,20 +37,10 @@ clean_quotes <- raw_quotes %>%
     .keep_all = TRUE
   ) %>%
   mutate(
-    author = replace_na(
-      author,
-      "Unknown"
-    ),
-    tags = replace_na(
-      tags,
-      "Uncategorised"
-    ),
-    quote_length = str_count(
-      quote,
-      "\\S+"
-    ),
+    author = replace_na(author, "Unknown"),
+    tags = replace_na(tags, "Uncategorised"),
     quote_length = as.integer(
-      quote_length
+      str_count(quote, "\\S+")
     )
   )
 
@@ -48,7 +49,9 @@ stopifnot(
   nrow(clean_quotes) >= 20,
   !anyNA(clean_quotes$quote),
   !anyNA(clean_quotes$author),
-  !anyNA(clean_quotes$quote_length)
+  !anyNA(clean_quotes$tags),
+  !anyNA(clean_quotes$quote_length),
+  !anyDuplicated(clean_quotes[c("quote", "author")])
 )
 
 # inspect results
@@ -56,14 +59,14 @@ print(summary(clean_quotes))
 print(colSums(is.na(clean_quotes)))
 print(sum(duplicated(clean_quotes)))
 
-# export CSV
+# export cleaned dataset
 write.csv(
   clean_quotes,
   "ETL_PostgreSQL/data/clean_quotes.csv",
   row.names = FALSE
 )
 
-
+# generate data quality report
 quality_report <- data.frame(
   metric = c(
     "Number of records",
@@ -73,12 +76,10 @@ quality_report <- data.frame(
   ),
   before = c(
     nrow(raw_quotes),
-    sum(is.na(raw_quotes$author) |
-          trimws(raw_quotes$author) == ""),
-    sum(is.na(raw_quotes$tags) |
-          trimws(raw_quotes$tags) == ""),
+    sum(is.na(standardised_quotes$author)),
+    sum(is.na(standardised_quotes$tags)),
     sum(duplicated(
-      raw_quotes[c("quote", "author")]
+      standardised_quotes[c("quote", "author")]
     ))
   ),
   after = c(
@@ -93,6 +94,7 @@ quality_report <- data.frame(
 
 print(quality_report)
 
+# export quality report
 write.csv(
   quality_report,
   "ETL_PostgreSQL/results/data_quality_report.csv",
